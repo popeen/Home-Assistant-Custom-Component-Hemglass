@@ -22,8 +22,8 @@ A sensor for getting information about the next time Hemglass comes to visit. Yo
 ```
 - platform: hemglass
   name: "Glassbilen"
-  latitude: 59,331
-  longitude: 18,1278
+  latitude: 59.331
+  longitude: 18.1278
 ```
 
 [releases-shield]: https://img.shields.io/github/release/popeen/Home-Assistant-Addon-Hemglass.svg
