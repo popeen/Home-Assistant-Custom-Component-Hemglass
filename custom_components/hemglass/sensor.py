@@ -120,6 +120,8 @@ class HemglassSensor(Entity):
         self._attr_comment = salesInfo['comment']
         self._attr_cancelled = salesInfo['cancelled']
         self._attr_cancelledMessage = salesInfo['cancelledMessage']
+        if self._attr_cancelledMessage is None:
+            self._attr_cancelledMessage = ""
 
         etaInfo = self.get_eta()
         self._attr_eta = etaInfo
