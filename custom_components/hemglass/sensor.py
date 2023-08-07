@@ -19,9 +19,9 @@ DOMAIN = "hemglass"
 CONF_LAT = "latitude"
 CONF_LONG = "longitude"
 
-MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=60)
+MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=5)
 
-SCAN_INTERVAL = timedelta(minutes=30)
+SCAN_INTERVAL = timedelta(minutes=5)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -84,7 +84,12 @@ class HemglassSensor(Entity):
             "email" : self._attr_depotEmail,
             "comment" : self._attr_comment,
             "canceled" : self._attr_cancelled,
-            "canceledMessage" : self._attr_cancelledMessage 
+            "canceledMessage" : self._attr_cancelledMessage,
+            "truckIsActiveToday" : self._attr_truckIsActiveToday,
+            "truckLocationUpdated" : self._attr_truckLocationUpdated,
+            "truckLatitude" : self._attr_truckLatitude,
+            "truckLongitude" : self._attr_truckLongitude,
+            "truckIsOffTrack" : self._attr_truckIsOffTrack
         }
         if hasattr(self, "add_state_attributes"):
             attributes = {**attributes, **self.add_state_attributes}
@@ -126,6 +131,28 @@ class HemglassSensor(Entity):
         etaInfo = self.get_eta()
         self._attr_eta = etaInfo
 
+        liveRouteInfo = self.get_live_route_info()
+        if liveRouteInfo is not None:
+            self._attr_truckIsActiveToday= True
+
+            forecast = self.get_route_forecast()
+            cords = (forecast[(int(liveRouteInfo['indices'][0]['index']) - 1)]).split(",")
+            self._attr_truckLatitude = cords[0]
+            self._attr_truckLongitude = cords[1]
+            self._attr_truckLocationUpdated = liveRouteInfo['indices'][0]['time']
+
+            if "isOffTrack" in liveRouteInfo:
+                self._attr_truckIsOffTrack = liveRouteInfo['isOffTrack']
+            else:
+                self._attr_truckIsOffTrack = ""
+
+        else:            
+            self._attr_truckIsActiveToday= False
+            self._attr_truckLatitude = ""
+            self._attr_truckLongitude = ""
+            self._attr_truckLocationUpdated = ""
+            self._attr_truckIsOffTrack = ""
+
         nextDateSplit = (self._attr_nextDate).split("T")
         return nextDateSplit[0]
 
@@ -143,3 +170,33 @@ class HemglassSensor(Entity):
         return requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(self._attr_stopId) + "&routeId=" + str(self._attr_routeId), headers={
                 'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
             }).json()['data']
+
+    def get_depot_info(self):
+        json = requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(self._attr_routeId), headers={
+                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
+            }).json()
+            
+        if json['statusCode'] == 200:
+            return json['data']
+        else:
+            return None
+    
+    def get_live_route_info(self):
+        json = requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(self._attr_routeId), headers={
+                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
+            }).json()
+            
+        if json['statusCode'] == 200:
+            return json['data']
+        else:
+            return None
+    
+    def get_route_forecast(self):
+        json = requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(self._attr_routeId), headers={
+                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
+            }).json()
+            
+        if json['statusCode'] == 200:
+            return json['data']
+        else:
+            return None
