@@ -77,7 +77,7 @@ class HemglassSensor(Entity):
             "longitude" : self._attr_stopLong,
             "streetAddress": self._attr_streetAddress,
             "city": self._attr_city,
-            "nextTime" : self._attr_nextTime,
+            "time" : self._attr_nextTime,
             "ETA" : self._attr_eta,
             "salesman" : self._attr_salesMan,
             "depot" : self._attr_depotName,
