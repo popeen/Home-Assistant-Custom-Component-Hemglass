@@ -6,5 +6,5 @@
   "documentation": "https://github.com/popeen/Home-Assistant-Custom-Component-Hemglass",
   "iot_class": "assumed_state",
   "issue_tracker": "https://github.com/popeen/Home-Assistant-Custom-Component-Hemglass/issues",
-  "version": "0.1.1"
+  "version": "0.1.2"
 }
