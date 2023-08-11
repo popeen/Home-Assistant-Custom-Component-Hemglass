@@ -16,7 +16,7 @@ A sensor for getting information about the next time Hemglass comes to visit. Yo
 |--|--|
 | Name | This is the name you want for the sensor in Home Assistant |
 | latitude | Latitude coordinate close to the stop you want |
-| longitude | longitude coordinate close to the stop you want |
+| longitude | Longitude coordinate close to the stop you want |
 
 
 ```
