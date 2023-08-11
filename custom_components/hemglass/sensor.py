@@ -140,7 +140,7 @@ class HemglassSensor(Entity):
         if liveRouteInfo is not None:
             self._attr_truckIsActiveToday= True
 
-            forecast = self.get_route_forecast()
+            forecast = await self.get_route_forecast(session)
             cords = (forecast[(int(liveRouteInfo['indices'][0]['index']) - 1)]).split(",")
             self._attr_truckLatitude = cords[0]
             self._attr_truckLongitude = cords[1]
