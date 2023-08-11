@@ -20,9 +20,9 @@ DOMAIN = "hemglass"
 CONF_LAT = "latitude"
 CONF_LONG = "longitude"
 
-MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=60)
+MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=5)
 
-SCAN_INTERVAL = timedelta(minutes=30)
+SCAN_INTERVAL = timedelta(minutes=5)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
