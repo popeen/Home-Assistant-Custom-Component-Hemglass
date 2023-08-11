@@ -25,6 +25,30 @@ After installing the integration using HACS and restarting your server you simpl
 | Longitude | Longitude coordinate close to the stop you want |
 
 
+**Attributes:**
+```
+date (state)
+latitude
+longitude
+streetAddress
+city
+time
+ETA
+salesman
+depot
+email
+comment
+canceled
+canceledMessage 
+truckIsActiveToday
+truckLocationUpdated
+truckLatitude
+truckLongitude
+truckIsOffTrack
+routeID
+```
+
+
 [releases-shield]: https://img.shields.io/github/release/popeen/Home-Assistant-Addon-Hemglass.svg
 [releases]: https://github.com/popeen/Home-Assistant-Addon-Hemglass/releases
 [project-stage-shield]: https://img.shields.io/badge/project%20stage-ready%20for%20use-green.svg
