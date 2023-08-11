@@ -14,14 +14,15 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import Entity
 from homeassistant.util import Throttle
 
+
 DOMAIN = "hemglass"
 
 CONF_LAT = "latitude"
 CONF_LONG = "longitude"
 
-MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=5)
+MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=60)
 
-SCAN_INTERVAL = timedelta(minutes=5)
+SCAN_INTERVAL = timedelta(minutes=30)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     {
@@ -31,15 +32,16 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
     }
 )
 
-def setup_platform(hass, config, add_entities, discovery_info=None) -> None:
-    """Set up the Hemglass sensor platform."""
+async def async_setup_entry(hass, config_entry, async_add_entities):
+    """Add sensors for passed config_entry in HA."""
+    session = async_get_clientsession(hass)
+    config = hass.data[DOMAIN][config_entry.entry_id]
+    
+    latitude = (hass.data[DOMAIN][config_entry.entry_id])[0]
+    longitude = (hass.data[DOMAIN][config_entry.entry_id])[1]
+    name = (hass.data[DOMAIN][config_entry.entry_id])[2]
 
-    sensor_name = config[CONF_NAME]
-    sensor_home_latitude = float(config[CONF_LAT])
-    sensor_home_longitude = float(config[CONF_LONG])
-
-    add_entities([HemglassSensor(sensor_name, sensor_home_latitude, sensor_home_longitude)])
-
+    async_add_entities([HemglassSensor(name, float(latitude), float(longitude))], update_before_add=True)
 
 class HemglassSensor(Entity):
     """Representation of a Sensor."""
@@ -49,13 +51,13 @@ class HemglassSensor(Entity):
         
         self._attr_unique_id = f"{DOMAIN}_{sensor_name}_{sensor_home_latitude}_{sensor_home_longitude}"
 
-        searchRange = 5 * 0.008999
+        searchRange = 10 * 0.008999
         self._attr_minLat = sensor_home_latitude - searchRange
         self._attr_maxLat = sensor_home_latitude + searchRange
         self._attr_minLong = sensor_home_longitude - searchRange
         self._attr_maxLong = sensor_home_longitude + searchRange
 
-        self._state = self.update_hemglass_data()
+        self._state = None
         self._name = sensor_name
 
         self._icon = "mdi:calendar"
@@ -72,25 +74,29 @@ class HemglassSensor(Entity):
 
     @property
     def extra_state_attributes(self):
-        attributes = {
-            "latitude" : self._attr_stopLat,
-            "longitude" : self._attr_stopLong,
-            "streetAddress": self._attr_streetAddress,
-            "city": self._attr_city,
-            "time" : self._attr_nextTime,
-            "ETA" : self._attr_eta,
-            "salesman" : self._attr_salesMan,
-            "depot" : self._attr_depotName,
-            "email" : self._attr_depotEmail,
-            "comment" : self._attr_comment,
-            "canceled" : self._attr_cancelled,
-            "canceledMessage" : self._attr_cancelledMessage,
-            "truckIsActiveToday" : self._attr_truckIsActiveToday,
-            "truckLocationUpdated" : self._attr_truckLocationUpdated,
-            "truckLatitude" : self._attr_truckLatitude,
-            "truckLongitude" : self._attr_truckLongitude,
-            "truckIsOffTrack" : self._attr_truckIsOffTrack
-        }
+        if self._attr_stopLat is not None:
+            attributes = {
+                "latitude" : self._attr_stopLat,
+                "longitude" : self._attr_stopLong,
+                "streetAddress": self._attr_streetAddress,
+                "city": self._attr_city,
+                "time" : self._attr_nextTime,
+                "ETA" : self._attr_eta,
+                "salesman" : self._attr_salesMan,
+                "depot" : self._attr_depotName,
+                "email" : self._attr_depotEmail,
+                "comment" : self._attr_comment,
+                "canceled" : self._attr_cancelled,
+                "canceledMessage" : self._attr_cancelledMessage,
+                "truckIsActiveToday" : self._attr_truckIsActiveToday,
+                "truckLocationUpdated" : self._attr_truckLocationUpdated,
+                "truckLatitude" : self._attr_truckLatitude,
+                "truckLongitude" : self._attr_truckLongitude,
+                "truckIsOffTrack" : self._attr_truckIsOffTrack,
+                "routeID" : self._attr_routeId
+            }
+        else:
+            attributes = {}
         if hasattr(self, "add_state_attributes"):
             attributes = {**attributes, **self.add_state_attributes}
         return attributes
@@ -101,13 +107,12 @@ class HemglassSensor(Entity):
         return self._icon
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
-    def update(self) -> None:
+    async def async_update(self) -> None:
         """Get the latest data and updates the states."""
-        self._state = update_hemglass_data()
-    
 
-    def update_hemglass_data(self):
-        nearestStop = self.get_nearest_stop()
+        session = async_get_clientsession(self.hass)
+
+        nearestStop = await self.get_nearest_stop(session)
         self._attr_stopId = nearestStop['stopId']
         self._attr_stopLat = nearestStop['latitude']
         self._attr_stopLong = nearestStop['longitude']
@@ -115,7 +120,7 @@ class HemglassSensor(Entity):
         self._attr_nextTime = nearestStop['nextTime']
         self._attr_routeId = nearestStop['routeId']
 
-        salesInfo = self.get_sales_info()
+        salesInfo = await self.get_sales_info(session )
         self._attr_salesMan = salesInfo['salesmanName']
         self._attr_phoneNumber = salesInfo['phoneNumber']
         self._attr_depotName = salesInfo['depotName'].capitalize()
@@ -128,10 +133,10 @@ class HemglassSensor(Entity):
         if self._attr_cancelledMessage is None:
             self._attr_cancelledMessage = ""
 
-        etaInfo = self.get_eta()
+        etaInfo = await self.get_eta(session)
         self._attr_eta = etaInfo
-
-        liveRouteInfo = self.get_live_route_info()
+        
+        liveRouteInfo = await self.get_live_route_info(session)
         if liveRouteInfo is not None:
             self._attr_truckIsActiveToday= True
 
@@ -154,49 +159,52 @@ class HemglassSensor(Entity):
             self._attr_truckIsOffTrack = ""
 
         nextDateSplit = (self._attr_nextDate).split("T")
-        return nextDateSplit[0]
+        self._state = nextDateSplit[0]
 
-    def get_nearest_stop(self):
-        return requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(self._attr_minLong) + "&minLat=" + str(self._attr_minLat) + "&maxLong=" + str(self._attr_maxLong) + "&maxLat=" + str(self._attr_maxLat) + "&limit=1", headers={
-                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
-            }).json()['data'][0]
+    async def get_nearest_stop(self, session):
+        url = "https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(self._attr_minLong) + "&minLat=" + str(self._attr_minLat) + "&maxLong=" + str(self._attr_maxLong) + "&maxLat=" + str(self._attr_maxLat) + "&limit=1"
+        async with session.get(url) as resp:
+            data = await resp.json()
+            return data['data'][0]
 
-    def get_sales_info(self):
-        return requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(self._attr_stopId), headers={
-                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
-            }).json()['data']
+    async def get_sales_info(self, session):
+        url = "https://iceman-prod.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(self._attr_stopId)
+        async with session.get(url) as resp:
+            data = await resp.json()
+            return data['data']
 
-    def get_eta(self):
-        return requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(self._attr_stopId) + "&routeId=" + str(self._attr_routeId), headers={
-                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
-            }).json()['data']
+    async def get_eta(self, session):
+        url = "https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(self._attr_stopId) + "&routeId=" + str(self._attr_routeId)
+        async with session.get(url) as resp:
+            data = await resp.json()
+            return data['data']
 
-    def get_depot_info(self):
-        json = requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(self._attr_routeId), headers={
-                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
-            }).json()
-            
-        if json['statusCode'] == 200:
-            return json['data']
-        else:
-            return None
-    
-    def get_live_route_info(self):
-        json = requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(self._attr_routeId), headers={
-                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
-            }).json()
-            
-        if json['statusCode'] == 200:
-            return json['data']
-        else:
-            return None
-    
-    def get_route_forecast(self):
-        json = requests.get(url="https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(self._attr_routeId), headers={
-                'user-agent': 'www.Home-Assistant.io - Add-On for Hemglass'
-            }).json()
-            
-        if json['statusCode'] == 200:
-            return json['data']
-        else:
-            return None
+    async def get_depot_info(self, session):
+        url = "https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(self._attr_routeId)
+        async with session.get(url) as resp:
+            data = await resp.json()
+
+            if data['statusCode'] == 200:
+                return data['data']
+            else:
+                return None        
+
+    async def get_live_route_info(self, session):
+        url = "https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(self._attr_routeId)
+        async with session.get(url) as resp:
+            data = await resp.json()
+
+            if data['statusCode'] == 200:
+                return data['data']
+            else:
+                return None     
+
+    async def get_route_forecast(self, session):
+        url = "https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(self._attr_routeId)
+        async with session.get(url) as resp:
+            data = await resp.json()
+
+            if data['statusCode'] == 200:
+                return data['data']
+            else:
+                return None     

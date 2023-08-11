@@ -1,0 +1,21 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Already configured"
+        },
+        "error": {
+            "unknown": "Unknown error",
+            "no_stops_found": "No stops found near the coordinates",
+            "invalid_coordinates": "Invalid coordinates"
+        },
+        "step": {
+            "user": {
+                "data": {
+                    "latitude": "Latitude",
+                    "longitude": "Longitude",
+                    "name": "Name"
+                }
+            }
+        }
+   }
+}
