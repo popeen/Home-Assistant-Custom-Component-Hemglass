@@ -37,11 +37,69 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     session = async_get_clientsession(hass)
     config = hass.data[DOMAIN][config_entry.entry_id]
     
-    latitude = (hass.data[DOMAIN][config_entry.entry_id])[0]
-    longitude = (hass.data[DOMAIN][config_entry.entry_id])[1]
-    name = (hass.data[DOMAIN][config_entry.entry_id])[2]
+    latitude = config[0]
+    longitude = config[1]
+    name = config[2]
+    routeId = config[3]
 
-    async_add_entities([HemglassSensor(name, float(latitude), float(longitude))], update_before_add=True)
+    async_add_entities([HemglassSensor(name, float(latitude), float(longitude)),HemglassTruckSensor((name + " Truck"), str(routeId))], update_before_add=True)
+        
+
+async def get_nearest_stop(session, latitude, longitude):    
+    
+    searchRange = 10 * 0.008999
+    minLat = float(latitude) - searchRange
+    maxLat = float(latitude) + searchRange
+    minLong = float(longitude) - searchRange
+    maxLong = float(longitude) + searchRange
+
+    url = "https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(minLong) + "&minLat=" + str(minLat) + "&maxLong=" + str(maxLong) + "&maxLat=" + str(maxLat) + "&limit=1"
+    async with session.get(url) as resp:
+        data = await resp.json()
+        return data['data'][0]
+
+async def get_sales_info(session, stopId):
+    url = "https://iceman-prod.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(stopId)
+    async with session.get(url) as resp:
+        data = await resp.json()
+        return data['data']
+
+async def get_eta(session, stopId, routeId):
+    url = "https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(stopId) + "&routeId=" + str(routeId)
+    async with session.get(url) as resp:
+        data = await resp.json()
+        return data['data']
+
+async def get_depot_info(session, routeId):
+    url = "https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(routeId)
+    async with session.get(url) as resp:
+        data = await resp.json()
+
+        if data['statusCode'] == 200:
+            return data['data']
+        else:
+            return None        
+
+async def get_live_route_info(session, routeId):
+    url = "https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(routeId)
+    async with session.get(url) as resp:
+        data = await resp.json()
+
+        if data['statusCode'] == 200:
+            return data['data']
+        else:
+            return None     
+
+async def get_route_forecast(session, routeId):
+    url = "https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(routeId)
+    async with session.get(url) as resp:
+        data = await resp.json()
+
+        if data['statusCode'] == 200:
+            return data['data']
+        else:
+            return None     
+        
 
 class HemglassSensor(Entity):
     """Representation of a Sensor."""
@@ -51,14 +109,11 @@ class HemglassSensor(Entity):
         
         self._attr_unique_id = f"{DOMAIN}_{sensor_name}_{sensor_home_latitude}_{sensor_home_longitude}"
 
-        searchRange = 10 * 0.008999
-        self._attr_minLat = sensor_home_latitude - searchRange
-        self._attr_maxLat = sensor_home_latitude + searchRange
-        self._attr_minLong = sensor_home_longitude - searchRange
-        self._attr_maxLong = sensor_home_longitude + searchRange
-
         self._state = None
+        self._attr_routeId = None
         self._name = sensor_name
+        self._homeLat = sensor_home_latitude
+        self._homeLong = sensor_home_longitude
 
         self._icon = "mdi:calendar"
         
@@ -109,10 +164,9 @@ class HemglassSensor(Entity):
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self) -> None:
         """Get the latest data and updates the states."""
-
         session = async_get_clientsession(self.hass)
 
-        nearestStop = await self.get_nearest_stop(session)
+        nearestStop = await get_nearest_stop(session, self._homeLat, self._homeLong)
         self._attr_stopId = nearestStop['stopId']
         self._attr_stopLat = nearestStop['latitude']
         self._attr_stopLong = nearestStop['longitude']
@@ -120,7 +174,7 @@ class HemglassSensor(Entity):
         self._attr_nextTime = nearestStop['nextTime']
         self._attr_routeId = nearestStop['routeId']
 
-        salesInfo = await self.get_sales_info(session )
+        salesInfo = await get_sales_info(session, self._attr_stopId)
         self._attr_salesMan = salesInfo['salesmanName']
         self._attr_phoneNumber = salesInfo['phoneNumber']
         self._attr_depotName = salesInfo['depotName'].capitalize()
@@ -133,14 +187,14 @@ class HemglassSensor(Entity):
         if self._attr_cancelledMessage is None:
             self._attr_cancelledMessage = ""
 
-        etaInfo = await self.get_eta(session)
+        etaInfo = await get_eta(session, self._attr_stopId, self._attr_routeId)
         self._attr_eta = etaInfo
         
-        liveRouteInfo = await self.get_live_route_info(session)
+        liveRouteInfo = await get_live_route_info(session, self._attr_routeId)
         if liveRouteInfo is not None:
             self._attr_truckIsActiveToday= True
 
-            forecast = await self.get_route_forecast(session)
+            forecast = await get_route_forecast(session, self._attr_routeId)
             cords = (forecast[(int(liveRouteInfo['indices'][0]['index']) - 1)]).split(",")
             self._attr_truckLatitude = cords[0]
             self._attr_truckLongitude = cords[1]
@@ -152,7 +206,7 @@ class HemglassSensor(Entity):
                 self._attr_truckIsOffTrack = ""
 
         else:            
-            self._attr_truckIsActiveToday= False
+            self._attr_truckIsActiveToday = False
             self._attr_truckLatitude = ""
             self._attr_truckLongitude = ""
             self._attr_truckLocationUpdated = ""
@@ -161,50 +215,79 @@ class HemglassSensor(Entity):
         nextDateSplit = (self._attr_nextDate).split("T")
         self._state = nextDateSplit[0]
 
-    async def get_nearest_stop(self, session):
-        url = "https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(self._attr_minLong) + "&minLat=" + str(self._attr_minLat) + "&maxLong=" + str(self._attr_maxLong) + "&maxLat=" + str(self._attr_maxLat) + "&limit=1"
-        async with session.get(url) as resp:
-            data = await resp.json()
-            return data['data'][0]
 
-    async def get_sales_info(self, session):
-        url = "https://iceman-prod.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(self._attr_stopId)
-        async with session.get(url) as resp:
-            data = await resp.json()
-            return data['data']
+class HemglassTruckSensor(Entity):
+    """Representation of a Sensor."""
+    
+    def __init__(self, sensor_name, routeId):
+        """Initialize the sensor."""
+        
+        self._attr_unique_id = f"{DOMAIN}_{routeId}"
+        self._state = False
+        self._name = sensor_name
+        self._attr_routeId = routeId
 
-    async def get_eta(self, session):
-        url = "https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(self._attr_stopId) + "&routeId=" + str(self._attr_routeId)
-        async with session.get(url) as resp:
-            data = await resp.json()
-            return data['data']
+        self._icon = "mdi:calendar"
+        
+    @property
+    def name(self):
+        """Return the name of the sensor."""
+        return self._name
 
-    async def get_depot_info(self, session):
-        url = "https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(self._attr_routeId)
-        async with session.get(url) as resp:
-            data = await resp.json()
+    @property
+    def state(self):
+        """Return the state of the sensor."""
+        return self._state
 
-            if data['statusCode'] == 200:
-                return data['data']
+    @property
+    def icon(self):
+        """Icon to use in the frontend."""
+        return self._icon
+
+    @property
+    def extra_state_attributes(self):
+        if self._attr_truckLatitude is not None:
+            attributes = {
+                "latitude" : self._attr_truckLatitude,
+                "longitude" : self._attr_truckLongitude,
+                "truckIsActiveToday" : self._attr_truckIsActiveToday,
+                "truckLocationUpdated" : self._attr_truckLocationUpdated,
+                "truckIsOffTrack" : self._attr_truckIsOffTrack,
+                "routeID" : self._attr_routeId
+            }
+        else:
+            attributes = {}
+        if hasattr(self, "add_state_attributes"):
+            attributes = {**attributes, **self.add_state_attributes}
+        return attributes
+    
+    @Throttle(MIN_TIME_BETWEEN_UPDATES)
+    async def async_update(self) -> None:
+        """Get the latest data and updates the states."""
+
+        session = async_get_clientsession(self.hass)
+
+        liveRouteInfo = await get_live_route_info(session, self._attr_routeId)
+        if liveRouteInfo is not None:
+            self._attr_truckIsActiveToday= True
+
+            forecast = await get_route_forecast(session, self._attr_routeId)
+            cords = (forecast[(int(liveRouteInfo['indices'][0]['index']) - 1)]).split(",")
+            self._attr_truckLatitude = cords[0]
+            self._attr_truckLongitude = cords[1]
+            self._attr_truckLocationUpdated = liveRouteInfo['indices'][0]['time']
+
+            if "isOffTrack" in liveRouteInfo:
+                self._attr_truckIsOffTrack = liveRouteInfo['isOffTrack']
             else:
-                return None        
+                self._attr_truckIsOffTrack = ""
 
-    async def get_live_route_info(self, session):
-        url = "https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(self._attr_routeId)
-        async with session.get(url) as resp:
-            data = await resp.json()
+        else:            
+            self._attr_truckIsActiveToday = False
+            self._attr_truckLatitude = ""
+            self._attr_truckLongitude = ""
+            self._attr_truckLocationUpdated = ""
+            self._attr_truckIsOffTrack = ""
 
-            if data['statusCode'] == 200:
-                return data['data']
-            else:
-                return None     
-
-    async def get_route_forecast(self, session):
-        url = "https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(self._attr_routeId)
-        async with session.get(url) as resp:
-            data = await resp.json()
-
-            if data['statusCode'] == 200:
-                return data['data']
-            else:
-                return None     
+        
+        self._state =  self._attr_truckIsActiveToday
