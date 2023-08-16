@@ -2,7 +2,8 @@
 import urllib.request, json, asyncio, hashlib, requests
 from datetime import timedelta
 from urllib import request
-
+from datetime import datetime
+from pytz import timezone
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 
@@ -36,17 +37,16 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     """Add sensors for passed config_entry in HA."""
     session = async_get_clientsession(hass)
     config = hass.data[DOMAIN][config_entry.entry_id]
-    
+
     latitude = config[0]
     longitude = config[1]
     name = config[2]
     routeId = config[3]
 
     async_add_entities([HemglassSensor(name, float(latitude), float(longitude)),HemglassTruckSensor((name + " Truck"), str(routeId))], update_before_add=True)
-        
 
 async def get_nearest_stop(session, latitude, longitude):    
-    
+
     searchRange = 10 * 0.008999
     minLat = float(latitude) - searchRange
     maxLat = float(latitude) + searchRange
@@ -68,7 +68,16 @@ async def get_eta(session, stopId, routeId):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(stopId) + "&routeId=" + str(routeId)
     async with session.get(url) as resp:
         data = await resp.json()
-        return data['data']
+        if data['data'] != "":
+
+            date = datetime.now().strftime("%Y-%m-%d")
+            date_string = date + " " + data['data'] + " +0000"
+            datetime_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M %z')
+            etaStockholmTime = datetime_obj.astimezone(timezone('Europe/Stockholm')).strftime('%H:%M')
+
+            return etaStockholmTime
+        else:
+            return ""
 
 async def get_depot_info(session, routeId):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(routeId)
@@ -78,7 +87,7 @@ async def get_depot_info(session, routeId):
         if data['statusCode'] == 200:
             return data['data']
         else:
-            return None        
+            return None
 
 async def get_live_route_info(session, routeId):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(routeId)
@@ -86,9 +95,16 @@ async def get_live_route_info(session, routeId):
         data = await resp.json()
 
         if data['statusCode'] == 200:
+
+            date = datetime.now().strftime("%Y-%m-%d")
+            date_string = date + " " + data['data']['indices'][0]['time'] + " +0000"
+            datetime_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S %z')
+            time = datetime_obj.astimezone(timezone('Europe/Stockholm'))
+            data['data']['indices'][0]['time'] = time.strftime('%H:%M:%S')
             return data['data']
+
         else:
-            return None     
+            return None
 
 async def get_route_forecast(session, routeId):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(routeId)
@@ -98,15 +114,14 @@ async def get_route_forecast(session, routeId):
         if data['statusCode'] == 200:
             return data['data']
         else:
-            return None     
-        
+            return None
 
 class HemglassSensor(Entity):
     """Representation of a Sensor."""
-    
+
     def __init__(self, sensor_name, sensor_home_latitude, sensor_home_longitude):
         """Initialize the sensor."""
-        
+
         self._attr_unique_id = f"{DOMAIN}_{sensor_name}_{sensor_home_latitude}_{sensor_home_longitude}"
 
         self._state = None
@@ -116,7 +131,7 @@ class HemglassSensor(Entity):
         self._homeLong = sensor_home_longitude
 
         self._icon = "mdi:calendar"
-        
+
     @property
     def name(self):
         """Return the name of the sensor."""
@@ -189,7 +204,7 @@ class HemglassSensor(Entity):
 
         etaInfo = await get_eta(session, self._attr_stopId, self._attr_routeId)
         self._attr_eta = etaInfo
-        
+
         liveRouteInfo = await get_live_route_info(session, self._attr_routeId)
         if liveRouteInfo is not None:
             self._attr_truckIsActiveToday= True
@@ -205,7 +220,7 @@ class HemglassSensor(Entity):
             else:
                 self._attr_truckIsOffTrack = ""
 
-        else:            
+        else:
             self._attr_truckIsActiveToday = False
             self._attr_truckLatitude = ""
             self._attr_truckLongitude = ""
@@ -218,17 +233,17 @@ class HemglassSensor(Entity):
 
 class HemglassTruckSensor(Entity):
     """Representation of a Sensor."""
-    
+
     def __init__(self, sensor_name, routeId):
         """Initialize the sensor."""
-        
+
         self._attr_unique_id = f"{DOMAIN}_{routeId}"
         self._state = False
         self._name = sensor_name
         self._attr_routeId = routeId
 
         self._icon = "mdi:calendar"
-        
+
     @property
     def name(self):
         """Return the name of the sensor."""
@@ -260,7 +275,7 @@ class HemglassTruckSensor(Entity):
         if hasattr(self, "add_state_attributes"):
             attributes = {**attributes, **self.add_state_attributes}
         return attributes
-    
+
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self) -> None:
         """Get the latest data and updates the states."""
@@ -282,12 +297,11 @@ class HemglassTruckSensor(Entity):
             else:
                 self._attr_truckIsOffTrack = ""
 
-        else:            
+        else:
             self._attr_truckIsActiveToday = False
             self._attr_truckLatitude = ""
             self._attr_truckLongitude = ""
             self._attr_truckLocationUpdated = ""
             self._attr_truckIsOffTrack = ""
 
-        
         self._state =  self._attr_truckIsActiveToday
