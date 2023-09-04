@@ -72,8 +72,8 @@ async def get_eta(session, stopId, routeId):
 
             date = datetime.now().strftime("%Y-%m-%d")
             date_string = date + " " + data['data'] + " +0000"
-            datetime_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M %z')
-            etaStockholmTime = datetime_obj.astimezone(timezone('Europe/Stockholm')).strftime('%H:%M')
+            datetime_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S %z')
+            etaStockholmTime = datetime_obj.astimezone(timezone('Europe/Stockholm'))
 
             return etaStockholmTime
         else:
@@ -237,7 +237,7 @@ class HemglassTruckSensor(Entity):
     def __init__(self, sensor_name, routeId):
         """Initialize the sensor."""
 
-        self._attr_unique_id = f"{DOMAIN}_{routeId}"
+        self._attr_unique_id = f"{DOMAIN}_{routeId}_truck"
         self._state = False
         self._name = sensor_name
         self._attr_routeId = routeId
