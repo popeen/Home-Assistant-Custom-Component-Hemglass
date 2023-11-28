@@ -7,7 +7,10 @@ from pytz import timezone
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 
-from homeassistant.components.sensor import PLATFORM_SCHEMA
+from homeassistant.components.sensor import (
+    PLATFORM_SCHEMA,
+    SensorDeviceClass
+)
 from homeassistant.const import (
     CONF_NAME
 )
@@ -124,13 +127,14 @@ class HemglassSensor(Entity):
 
         self._attr_unique_id = f"{DOMAIN}_{sensor_name}_{sensor_home_latitude}_{sensor_home_longitude}"
 
-        self._state = None
+        self._state = "1970-01-01T00:00:00"
         self._attr_routeId = None
         self._name = sensor_name
         self._homeLat = sensor_home_latitude
         self._homeLong = sensor_home_longitude
 
         self._icon = "mdi:calendar"
+        self._deviceclass = SensorDeviceClass.TIMESTAMP
 
     @property
     def name(self):
@@ -175,6 +179,11 @@ class HemglassSensor(Entity):
     def icon(self):
         """Icon to use in the frontend."""
         return self._icon
+
+    @property
+    def device_class(self):
+        """Return the class of this device."""
+        return self._deviceclass
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self) -> None:
@@ -227,8 +236,7 @@ class HemglassSensor(Entity):
             self._attr_truckLocationUpdated = ""
             self._attr_truckIsOffTrack = ""
 
-        nextDateSplit = (self._attr_nextDate).split("T")
-        self._state = nextDateSplit[0]
+        self._state = self._attr_nextDate
 
 
 class HemglassTruckSensor(Entity):
