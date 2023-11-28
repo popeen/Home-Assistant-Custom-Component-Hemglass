@@ -13,16 +13,6 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 DOMAIN = "hemglass"
 _LOGGER = logging.getLogger(__name__)
 
-
-DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required("name"): str,
-        vol.Required("latitude"): str,
-        vol.Required("longitude"): str
-    }
-)
-
-
 async def validate_input(hass: HomeAssistant, data: dict) -> dict[str, Any]:
     """Validate the user input."""
 
@@ -75,7 +65,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "unknown"
 
         return self.async_show_form(
-            step_id="user", data_schema=DATA_SCHEMA, errors=errors
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name", default="Hemglass"): str,
+                    vol.Required("latitude", default=str(self.hass.config.latitude)): str,
+                    vol.Required("longitude", default=str(self.hass.config.longitude)): str
+                }
+            ),
+            errors=errors
         )
 
 
