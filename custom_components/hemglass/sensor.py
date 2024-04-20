@@ -7,10 +7,7 @@ from pytz import timezone
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 
-from homeassistant.components.sensor import (
-    PLATFORM_SCHEMA,
-    SensorDeviceClass
-)
+from homeassistant.components.sensor import PLATFORM_SCHEMA
 from homeassistant.const import (
     CONF_NAME
 )
@@ -59,13 +56,13 @@ async def get_nearest_stop(session, latitude, longitude):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(minLong) + "&minLat=" + str(minLat) + "&maxLong=" + str(maxLong) + "&maxLat=" + str(maxLat) + "&limit=1"
     async with session.get(url) as resp:
         data = await resp.json()
-        return data['data'][0]
+        return replace_nulls_with_empty_string(data['data'][0])
 
 async def get_sales_info(session, stopId):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(stopId)
     async with session.get(url) as resp:
         data = await resp.json()
-        return data['data']
+        return replace_nulls_with_empty_string(data['data'])
 
 async def get_eta(session, stopId, routeId):
     url = "https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(stopId) + "&routeId=" + str(routeId)
@@ -88,7 +85,7 @@ async def get_depot_info(session, routeId):
         data = await resp.json()
 
         if data['statusCode'] == 200:
-            return data['data']
+            return replace_nulls_with_empty_string(data['data'])
         else:
             return None
 
@@ -104,7 +101,7 @@ async def get_live_route_info(session, routeId):
             datetime_obj = datetime.strptime(date_string, '%Y-%m-%d %H:%M:%S %z')
             time = datetime_obj.astimezone(timezone('Europe/Stockholm'))
             data['data']['indices'][0]['time'] = time.strftime('%H:%M:%S')
-            return data['data']
+            return replace_nulls_with_empty_string(data['data'])
 
         else:
             return None
@@ -115,9 +112,24 @@ async def get_route_forecast(session, routeId):
         data = await resp.json()
 
         if data['statusCode'] == 200:
-            return data['data']
+            return replace_nulls_with_empty_string(data['data'])
         else:
             return None
+
+def replace_nulls_with_empty_string(obj):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if value is None:
+                obj[key] = ""
+            else:
+                replace_nulls_with_empty_string(value)
+    elif isinstance(obj, list):
+        for i, item in enumerate(obj):
+            if item is None:
+                obj[i] = ""
+            else:
+                replace_nulls_with_empty_string(item)
+    return obj
 
 class HemglassSensor(Entity):
     """Representation of a Sensor."""
@@ -127,14 +139,13 @@ class HemglassSensor(Entity):
 
         self._attr_unique_id = f"{DOMAIN}_{sensor_name}_{sensor_home_latitude}_{sensor_home_longitude}"
 
-        self._state = "1970-01-01T00:00:00"
+        self._state = None
         self._attr_routeId = None
         self._name = sensor_name
         self._homeLat = sensor_home_latitude
         self._homeLong = sensor_home_longitude
 
         self._icon = "mdi:calendar"
-        self._deviceclass = SensorDeviceClass.TIMESTAMP
 
     @property
     def name(self):
@@ -180,11 +191,6 @@ class HemglassSensor(Entity):
         """Icon to use in the frontend."""
         return self._icon
 
-    @property
-    def device_class(self):
-        """Return the class of this device."""
-        return self._deviceclass
-
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     async def async_update(self) -> None:
         """Get the latest data and updates the states."""
@@ -199,6 +205,7 @@ class HemglassSensor(Entity):
         self._attr_routeId = nearestStop['routeId']
 
         salesInfo = await get_sales_info(session, self._attr_stopId)
+
         self._attr_salesMan = salesInfo['salesmanName']
         self._attr_phoneNumber = salesInfo['phoneNumber']
         self._attr_depotName = salesInfo['depotName'].capitalize()
@@ -236,7 +243,8 @@ class HemglassSensor(Entity):
             self._attr_truckLocationUpdated = ""
             self._attr_truckIsOffTrack = ""
 
-        self._state = self._attr_nextDate
+        nextDateSplit = (self._attr_nextDate).split("T")
+        self._state = nextDateSplit[0]
 
 
 class HemglassTruckSensor(Entity):
