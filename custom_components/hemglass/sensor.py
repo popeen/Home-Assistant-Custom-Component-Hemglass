@@ -53,19 +53,19 @@ async def get_nearest_stop(session, latitude, longitude):
     minLong = float(longitude) - searchRange
     maxLong = float(longitude) + searchRange
 
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(minLong) + "&minLat=" + str(minLat) + "&maxLong=" + str(maxLong) + "&maxLat=" + str(maxLat) + "&limit=1"
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(minLong) + "&minLat=" + str(minLat) + "&maxLong=" + str(maxLong) + "&maxLat=" + str(maxLat) + "&limit=1"
     async with session.get(url) as resp:
         data = await resp.json()
         return replace_nulls_with_empty_string(data['data'][0])
 
 async def get_sales_info(session, stopId):
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(stopId)
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/getSalesInfoByStop?stopId=" + str(stopId)
     async with session.get(url) as resp:
         data = await resp.json()
         return replace_nulls_with_empty_string(data['data'])
 
 async def get_eta(session, stopId, routeId):
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(stopId) + "&routeId=" + str(routeId)
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/stopsEta?stopId=" + str(stopId) + "&routeId=" + str(routeId)
     async with session.get(url) as resp:
         data = await resp.json()
         if data['data'] != "":
@@ -80,7 +80,7 @@ async def get_eta(session, stopId, routeId):
             return ""
 
 async def get_depot_info(session, routeId):
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/depotInfo/" + str(routeId)
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/depotInfo/" + str(routeId)
     async with session.get(url) as resp:
         data = await resp.json()
 
@@ -90,7 +90,7 @@ async def get_depot_info(session, routeId):
             return None
 
 async def get_live_route_info(session, routeId):
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/liverouteinfo/" + str(routeId)
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/liverouteinfo/" + str(routeId)
     async with session.get(url) as resp:
         data = await resp.json()
 
@@ -107,7 +107,7 @@ async def get_live_route_info(session, routeId):
             return None
 
 async def get_route_forecast(session, routeId):
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/routeforecast/" + str(routeId)
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/routeforecast/" + str(routeId)
     async with session.get(url) as resp:
         data = await resp.json()
 

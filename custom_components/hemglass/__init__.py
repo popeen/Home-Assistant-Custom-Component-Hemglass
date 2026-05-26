@@ -33,7 +33,7 @@ async def get_nearest_stop(session, latitude, longitude):
     minLong = float(longitude) - searchRange
     maxLong = float(longitude) + searchRange
 
-    url = "https://iceman-prod.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(minLong) + "&minLat=" + str(minLat) + "&maxLong=" + str(maxLong) + "&maxLat=" + str(maxLat) + "&limit=1"
+    url = "https://hg-be-iceman-prod-cmb0g2c9g6fqadgs.swedencentral-01.azurewebsites.net/api/tracker/getNearestStops?minLong=" + str(minLong) + "&minLat=" + str(minLat) + "&maxLong=" + str(maxLong) + "&maxLat=" + str(maxLat) + "&limit=1"
     async with session.get(url) as resp:
         data = await resp.json()
         return data['data'][0]
